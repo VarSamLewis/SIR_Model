@@ -1,4 +1,6 @@
-﻿use rand::Rng; // ✅ Brings the `.gen()` method into scope
+﻿use crate::utils::maths::SirParams;
+use rand::Rng;
+use std::mem::size_of;
 
 // ffsdg
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -21,21 +23,15 @@ pub struct Grid {
 
 impl Grid {
     /// Creates a new grid of given dimensions.
-    /// Most cells are `Susceptible`, with a small fraction randomly `Infected`.
-    ///
-    /// # Arguments
-    /// * `width` - number of columns in the grid
-    /// * `height` - number of rows in the grid
-    /// * `infected_fraction` - fraction of the population to initialize as infected (e.g. 0.01 = 1%)
-    pub fn init(grid_x: usize, grid_y: usize, infected_ratio: f64) -> Self {
+    /// Uses `i_ratio` from `SirParams` to determine the fraction of cells initialized as infected.
+    pub fn init(grid_x: usize, grid_y: usize, params: &SirParams) -> Self {
         let size = grid_x * grid_y;
-        let mut rng = rand::thread_rng(); // ✅ Get a random number generator
 
         let cells = (0..size)
             .map(|_| {
-                let mut rng = rand::thread_rng(); // Get RNG
-                let roll = rng.r#gen::<f64>(); // Generates a float between 0.0 and 1.0
-                let state = if roll < infected_ratio {
+                let mut rng = rand::thread_rng();
+                let roll = rng.r#gen::<f64>(); // 🔥 This must use `gen` from `Rng`
+                let state = if roll < params.i_ratio {
                     HealthState::Infected
                 } else {
                     HealthState::Susceptible
@@ -50,34 +46,40 @@ impl Grid {
             cells,
         }
     }
-    /*
-    /// Convert a 2D (x, y) position into a 1D index for accessing `cells`.
-    /// Since we store the grid as a flat Vec<Cell>, this is how we simulate 2D access.
-    pub fn get_index(&self, x: usize, y: usize) -> usize {
-        y * self.grid_x + x // row-major layout: rows first, then columns
+
+    pub fn get_grid_size(&self) -> (usize, usize, usize) {
+        let cell_size = size_of::<Cell>();
+        let heap_size = self.cells.len() * cell_size;
+        let grid_struct_size = size_of::<Grid>();
+
+        println!("Size of one Cell: {} bytes", cell_size);
+        println!(
+            "Total heap size: {} bytes (~{:.2} MB)",
+            heap_size,
+            heap_size as f64 / (1024.0 * 1024.0)
+        );
+        println!("Stack size of Grid struct: {} bytes", grid_struct_size);
+
+        (cell_size, heap_size, grid_struct_size)
     }
 
-    /// Returns a list of valid neighboring coordinates for a given cell (x, y).
-    /// This is an 8-connected neighborhood (including diagonals).
+    pub fn get_index(&self, x: usize, y: usize) -> usize {
+        y * self.grid_x + x // Row-major layout: rows first, then columns
+    }
+
     pub fn get_neighbors(&self, x: usize, y: usize) -> Vec<(usize, usize)> {
-        // Allocate enough space for 8 neighbors up front (performance-friendly)
         let mut neighbors = Vec::with_capacity(8);
 
-        // Loop over the 3x3 area around the (x, y) cell
-        for dy in [-1, 0, 1] {
-            for dx in [-1, 0, 1] {
-                // Skip the center cell (itself)
+        for dy in -1..=1 {
+            for dx in -1..=1 {
                 if dx == 0 && dy == 0 {
                     continue;
                 }
 
-                // Compute the neighbor's coordinates
                 let nx = x as isize + dx;
                 let ny = y as isize + dy;
 
-                // Check if the neighbor is within the grid bounds
                 if nx >= 0 && nx < self.grid_x as isize && ny >= 0 && ny < self.grid_y as isize {
-                    // If it is, add it to the list (as a usize pair)
                     neighbors.push((nx as usize, ny as usize));
                 }
             }
@@ -85,19 +87,83 @@ impl Grid {
 
         neighbors
     }
-    */
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::maths::SirParams;
+
+    fn dummy_params(i_ratio: f64) -> SirParams {
+        SirParams {
+            beta: 0.0,
+            gamma: 0.0,
+            dt: 1.0,
+            i_ratio,
+            s_ratio: 1.0, // Fully susceptible for now
+        }
+    }
 
     #[test]
-    fn test_init_case1() {
-        let grid = Grid::init(10, 5, 0.0);
+    fn test_gridinit_case1() {
+        let params = dummy_params(0.0);
+        let grid = Grid::init(10, 5, &params);
         assert_eq!(grid.grid_x, 10);
         assert_eq!(grid.grid_y, 5);
         assert_eq!(grid.cells.len(), 50);
+    }
+
+    #[test]
+    fn test_grid_get_grid_size_case1() {
+        let params = dummy_params(0.0);
+        let grid = Grid::init(100, 100, &params);
+        let (cell_size, heap_size, struct_size) = grid.get_grid_size();
+        assert_eq!(cell_size, 1);
+        assert_eq!(heap_size, 10000);
+        assert_eq!(struct_size, 40);
+    }
+
+    #[test]
+    fn test_grid_get_index_case1() {
+        let params = dummy_params(0.0);
+        let grid = Grid::init(10, 5, &params);
+        assert_eq!(grid.get_index(3, 2), 23);
+        assert_eq!(grid.get_index(0, 0), 0);
+        assert_eq!(grid.get_index(9, 4), 49);
+    }
+
+    #[test]
+    fn test_grid_get_neighbors_case1() {
+        let params = dummy_params(0.0);
+        let grid = Grid::init(20, 20, &params);
+        let neighbors = grid.get_neighbors(10, 10);
+        assert_eq!(neighbors.len(), 8);
+        assert!(neighbors.contains(&(9, 9)));
+        assert!(neighbors.contains(&(10, 9)));
+        assert!(neighbors.contains(&(11, 11)));
+    }
+
+    #[test]
+    fn test_grid_get_neighbors_case2() {
+        let params = dummy_params(0.0);
+        let grid = Grid::init(20, 20, &params);
+        let neighbors = grid.get_neighbors(0, 0);
+        assert_eq!(neighbors.len(), 3);
+        assert!(neighbors.contains(&(1, 0)));
+        assert!(neighbors.contains(&(0, 1)));
+        assert!(neighbors.contains(&(1, 1)));
+    }
+
+    #[test]
+    fn test_grid_get_neighbors_case3() {
+        let params = dummy_params(0.0);
+        let grid = Grid::init(20, 20, &params);
+        let neighbors = grid.get_neighbors(0, 10);
+        assert_eq!(neighbors.len(), 5);
+        assert!(neighbors.contains(&(0, 9)));
+        assert!(neighbors.contains(&(1, 9)));
+        assert!(neighbors.contains(&(1, 10)));
+        assert!(neighbors.contains(&(0, 11)));
+        assert!(neighbors.contains(&(1, 11)));
     }
 }

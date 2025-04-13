@@ -1,8 +1,12 @@
-pub struct SirParams {
+﻿pub struct SirParams {
     pub beta: f64,   // Infection rate
     pub gamma: f64,  // Recovery rate
+    pub dt:f64,
+    pub i_ratio: f64,
+    pub s_ratio: f64,
 }
-
+/*
+//Future use in an ODE based approach rather than an agent-based approach
 pub fn update_sir(s: f64, i: f64, r: f64, params: &SirParams, dt: f64) -> (f64, f64, f64) {
     let ds = -params.beta * s * i * dt;
     let di = (params.beta * s * i - params.gamma * i) * dt;
@@ -10,10 +14,10 @@ pub fn update_sir(s: f64, i: f64, r: f64, params: &SirParams, dt: f64) -> (f64, 
 
     (s + ds, i + di, r + dr)
 }
-
+*/
 
 // Bring in types from the `grid` module.
-use crate::grid::{Cell, Grid, HealthState};
+use crate::utils::grid::{Cell, Grid, HealthState};
 
 /// Holds counts of how many people are in each state.
 /// This is used to track how the disease progresses over time.
@@ -44,4 +48,38 @@ pub fn count_states(grid: &Grid) -> PopulationStats {
 
     // Return the final counts
     stats
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_maths_count_states_case1() { 
+        // 🧪 Create a small 2x2 grid with known health states.
+        // This removes randomness and gives us full control over the expected outcome.
+        let cells = vec![
+            Cell { state: HealthState::Susceptible }, // 1 Susceptible
+            Cell { state: HealthState::Infected },    // 1 Infected
+            Cell { state: HealthState::Recovered },   // 1 Recovered
+            Cell { state: HealthState::Infected },    // 1 more Infected (total: 2)
+        ];
+
+        // 🧱 Manually construct the grid with our predefined cells
+        let grid = Grid {
+            grid_x: 2,
+            grid_y: 2,
+            cells,
+        };
+
+        // 🧮 Call the function under test
+        let stats = count_states(&grid);
+
+        // ✅ Assert that the counts match what we expect
+        assert_eq!(stats.susceptible, 1); // 1 Susceptible
+        assert_eq!(stats.infected, 2);    // 2 Infected
+        assert_eq!(stats.recovered, 1);   // 1 Recovered
+    }
+
 }

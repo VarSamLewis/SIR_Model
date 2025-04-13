@@ -1,33 +1,42 @@
-
-mod utils {
+﻿mod utils {
     pub mod grid;
+    pub mod maths;
+    pub mod simulation;
 }
-/*
-mod maths;
-mod simulation;
 
-use crate::grid::{Grid, HealthState};
-use crate::maths::SirParams;
-use crate::simulation::step_grid;
-
+use crate::utils::grid::{Grid, HealthState};
+use crate::utils::maths::{SirParams, count_states};
+use crate::utils::simulation::step_grid;
 
 fn main() {
-    let mut grid = Grid::init(100, 100, 0.01); // 1% initially infected
-    let params = SirParams { beta: 0.3, gamma: 0.1 };
+    // 1. Define simulation parameters (including infection ratios)
+    let params = SirParams {
+        beta: 0.3,         // Infection rate
+        gamma: 0.1,        // Recovery rate
+        dt: 1.0,           // Time step (days)
+        i_ratio: 0.01,     // 1% initially infected
+        s_ratio: 1.0,      // All others are susceptible
+    };
 
-    let mut time = 0.0;
-    let dt = 1.0;
+    // 2. Initialize grid using SirParams
+    let mut grid = Grid::init(100, 100, &params);
 
-    while grid.count_infected() > 0 {
+    // 3. Run simulation loop
+    let mut day = 0;
+    loop {
+        let stats = count_states(&grid);
+        println!(
+            "Day {:3}: Susceptible = {:5}, Infected = {:5}, Recovered = {:5}",
+            day, stats.susceptible, stats.infected, stats.recovered
+        );
+
+        if stats.infected == 0 {
+            println!("✅ Infection has died out. Simulation complete.");
+            break;
+        }
+
         step_grid(&mut grid, &params);
-        time += dt;
-        println!("Time: {:.1} | Infected: {}", time, grid.count_infected());
+        day += 1;
     }
-
-    println!("Disease ran its course in {:.1} days", time);
 }
-*/
 
-fn main() {
-    println!("Compiles");
-}
