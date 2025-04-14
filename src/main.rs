@@ -9,6 +9,7 @@ use crate::utils::maths::{SirParams, count_states};
 use crate::utils::simulation::step_grid;
 
 fn main() {
+
     // 1. Define simulation parameters (including infection ratios)
     let params = SirParams {
         beta: 0.3,         // Infection rate
@@ -19,9 +20,13 @@ fn main() {
     };
 
     // 2. Initialize grid using SirParams
-    let mut grid = Grid::init(100, 100, &params);
+    let mut grid = Grid::init(8, 15, &params);
+
+    let (cell_size, heap_size, struct_size) = grid.get_grid_size();
+    println!("cell_size {}, heap_size {}, struct_size {}",cell_size, heap_size, struct_size);
 
     // 3. Run simulation loop
+    
     let mut day = 0;
     loop {
         let stats = count_states(&grid);

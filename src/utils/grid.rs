@@ -25,12 +25,22 @@ impl Grid {
     /// Creates a new grid of given dimensions.
     /// Uses `i_ratio` from `SirParams` to determine the fraction of cells initialized as infected.
     pub fn init(grid_x: usize, grid_y: usize, params: &SirParams) -> Self {
+
+        let max_cells = 1_000_000_000; // 10 million max cells
         let size = grid_x * grid_y;
+
+        if size > max_cells {
+            panic!(
+                "Grid too large: {}x{} = {} cells. Limit is {}.\n\
+                 Please reduce the grid size (e.g., grid_x * grid_y <= {}).",
+                grid_x, grid_y, size, max_cells, max_cells
+            );
+        }
 
         let cells = (0..size)
             .map(|_| {
                 let mut rng = rand::thread_rng();
-                let roll = rng.r#gen::<f64>(); // 🔥 This must use `gen` from `Rng`
+                let roll = rng.r#gen::<f64>(); 
                 let state = if roll < params.i_ratio {
                     HealthState::Infected
                 } else {
@@ -46,7 +56,6 @@ impl Grid {
             cells,
         }
     }
-
     pub fn get_grid_size(&self) -> (usize, usize, usize) {
         let cell_size = size_of::<Cell>();
         let heap_size = self.cells.len() * cell_size;
