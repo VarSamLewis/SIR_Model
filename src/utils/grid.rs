@@ -107,6 +107,89 @@ impl Grid {
     }
 }
 
+pub struct Tile<'a> {
+    pub origin_x: usize,
+    pub origin_y: usize,
+    pub tile_x: usize,
+    pub tile_y: usize,
+    pub grid: &'a Grid,
+}
+
+impl<'a> Tile<'a> {
+    pub fn get_state(&self, x: usize, y: usize) -> Option<HealthState> {
+        //Calculates the equiv cell in Grid
+        let global_x = self.origin_x + x;
+        let global_y = self.origin_y + y;
+
+        //If equiv both cell is greater or equal retrun nothing 
+        if global_x >= self.grid.grid_x || global_y >= self.grid.grid_y {
+            return None;
+        }
+
+        //Get the linear index into the full grid for the given global coordinates (x, y)
+        let idx = self.grid.get_index(global_x, global_y);
+        
+        //Read the HealthState at that index from the grid and return it
+        //Some checks if the value is not null
+        Some(self.grid.read(idx))
+    }
+
+    pub fn get_neighbors(&self, x: usize, y: usize) -> Vec<HealthState> {
+        // Pre-allocate space for up to 8 neighbors
+        let mut neighbors = Vec::with_capacity(8);
+
+        // Loop over the 3x3 grid centered at (x, y)
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                if dx == 0 && dy == 0 { continue; }
+                 // Compute neighbor coordinates (may be negative)
+                let nx = x as isize + dx;
+                let ny = y as isize + dy;
+
+                // Try to convert isize -> usize safely (only works if >= 0)
+                if let (Some(nx), Some(ny)) =
+                    (nx.try_into().ok(), ny.try_into().ok())
+                {
+                    // Use get_state to retrieve the neighbor’s health state (returns Option)
+                    if let Some(state) = self.get_state(nx, ny) {
+                        // If the neighbor exists and is within bounds, store its state
+                        neighbors.push(state);
+                    }
+                }
+            }
+        }
+        neighbors
+    }
+}
+
+pub fn tile_grid(grid: &Grid, tile_width: usize, tile_height: usize) -> Vec<Tile> {
+    let mut tiles = Vec::new();
+
+    let num_tiles_x = (grid.grid_x + tile_width - 1) / tile_width;
+    let num_tiles_y = (grid.grid_y + tile_height - 1) / tile_height;
+
+    for tile_y in 0..num_tiles_y {
+        for tile_x in 0..num_tiles_x {
+            let origin_x = tile_x * tile_width;
+            let origin_y = tile_y * tile_height;
+
+            // Clamp width/height to avoid going out of bounds
+            let actual_width = (origin_x + tile_width).min(grid.grid_x) - origin_x;
+            let actual_height = (origin_y + tile_height).min(grid.grid_y) - origin_y;
+
+            tiles.push(Tile {
+                origin_x,
+                origin_y,
+                tile_x: actual_width,
+                tile_y: actual_height,
+                grid,
+            });
+        }
+    }
+
+    tiles
+}
+
 
 
 #[cfg(test)]
@@ -186,5 +269,39 @@ mod tests {
         assert!(neighbors.contains(&(1, 10)));
         assert!(neighbors.contains(&(0, 11)));
         assert!(neighbors.contains(&(1, 11)));
+    }
+
+    #[test]
+    fn test_grid_tile_grid_case1() {
+        use crate::utils::maths::SirParams;
+
+        // Dummy params for grid initialization
+        let params = SirParams {
+            beta: 0.0,
+            gamma: 0.0,
+            dt: 1.0,
+            i_ratio: 0.0,
+            s_ratio: 1.0,
+        };
+
+        // 100x100 grid
+        let grid = Grid::init(100, 100, &params);
+
+        // Tile into 25x25 chunks
+        let tiles = tile_grid(&grid, 25, 25);
+
+        // Should be 4 x 4 = 16 tiles
+        assert_eq!(tiles.len(), 16);
+
+        // Check some key tile origins
+        assert_eq!(tiles[0].origin_x, 0);
+        assert_eq!(tiles[0].origin_y, 0);
+
+        assert_eq!(tiles[1].origin_x, 25);
+        assert_eq!(tiles[1].origin_y, 0);
+
+        assert_eq!(tiles[4].origin_x, 0);
+        assert_eq!(tiles[4].origin_y, 25);
+        
     }
 }

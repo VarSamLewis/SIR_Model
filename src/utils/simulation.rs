@@ -1,5 +1,5 @@
 use rand::Rng;
-use crate::utils::grid::{Grid, HealthState};
+use crate::utils::grid::{Grid, HealthState, Tile, tile_grid};
 
 use crate::utils::maths::SirParams;
 
@@ -56,7 +56,46 @@ pub fn step_grid(grid: &mut Grid, params: &SirParams) {
 
     *grid = new_grid;
 }
+pub fn step_tile(tile: &Tile, params: &SirParams, output: &mut Grid) {
+    for y in 0..tile.tile_y {
+        for x in 0..tile.tile_x {
+            let idx = output.get_index(tile.origin_x + x, tile.origin_y + y);
+            let current = tile.get_state(x, y).unwrap();
+            let neighbors = tile.get_neighbors(x, y);
 
+            let new_state = match current {
+                HealthState::Susceptible => {
+                    let infected_neighbors = neighbors.iter().filter(|&&s| s == HealthState::Infected).count();
+                    let p = (params.beta * infected_neighbors as f64 / 8.0) * params.dt;
+                    if rand::random::<f64>() < p {
+                        HealthState::Infected
+                    } else {
+                        HealthState::Susceptible
+                    }
+                }
+                HealthState::Infected => {
+                    if rand::random::<f64>() < params.gamma * params.dt {
+                        HealthState::Recovered
+                    } else {
+                        HealthState::Infected
+                    }
+                }
+                HealthState::Recovered => HealthState::Recovered,
+            };
+
+            output.write(idx, new_state);
+        }
+    }
+}
+
+pub fn step_grid_tiled(grid: &Grid, params: &SirParams, tile_width: usize, tile_height: usize) -> Grid {
+    let mut next = Grid::init(grid.grid_x, grid.grid_y, &SirParams { beta: 0.0, gamma: 0.0, dt: 1.0, i_ratio: 0.0, s_ratio: 1.0 });
+    let tiles = tile_grid(grid, tile_width, tile_height);
+    for tile in &tiles {
+        step_tile(tile, params, &mut next);
+    }
+    next
+}
 
 #[cfg(test)]
 mod tests {

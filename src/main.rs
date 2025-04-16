@@ -6,7 +6,7 @@
 
 use crate::utils::grid::{Grid, HealthState};
 use crate::utils::maths::{SirParams, count_states};
-use crate::utils::simulation::step_grid;
+use crate::utils::simulation::{step_grid, step_grid_tiled};
 
 // Time code execution
 use std::time::Instant;
@@ -42,7 +42,9 @@ fn main() {
             break;
         }
 
-        step_grid(&mut grid, &params);
+
+        step_grid(&mut grid, &params)
+;        //step_grid_tiled(&mut grid, &params, 25,25);
         day += 1;
     }
     
