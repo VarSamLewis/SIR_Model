@@ -15,9 +15,7 @@ pub fn update_sir(s: f64, i: f64, r: f64, params: &SirParams, dt: f64) -> (f64, 
     (s + ds, i + di, r + dr)
 }
 */
-
-// Bring in types from the `grid` module.
-use crate::utils::grid::{Cell, Grid, HealthState};
+use crate::utils::grid::{Grid, HealthState};
 
 /// Holds counts of how many people are in each state.
 /// This is used to track how the disease progresses over time.
@@ -37,49 +35,43 @@ pub fn count_states(grid: &Grid) -> PopulationStats {
         recovered: 0,
     };
 
-    // Loop through each cell in the grid and increment the appropriate counter
-    for cell in grid.cells.iter() {
-        match cell.state {
+    // Iterate over every cell by linear index
+    let total_cells = grid.grid_x * grid.grid_y;
+    for idx in 0..total_cells {
+        match grid.read(idx) {
             HealthState::Susceptible => stats.susceptible += 1,
-            HealthState::Infected => stats.infected += 1,
-            HealthState::Recovered => stats.recovered += 1,
+            HealthState::Infected    => stats.infected    += 1,
+            HealthState::Recovered   => stats.recovered   += 1,
         }
     }
 
-    // Return the final counts
     stats
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::maths::SirParams;
+    use crate::utils::grid::Grid;
+    use crate::utils::grid::HealthState;
 
-    #[test]
-    fn test_maths_count_states_case1() { 
-        // 🧪 Create a small 2x2 grid with known health states.
-        // This removes randomness and gives us full control over the expected outcome.
-        let cells = vec![
-            Cell { state: HealthState::Susceptible }, // 1 Susceptible
-            Cell { state: HealthState::Infected },    // 1 Infected
-            Cell { state: HealthState::Recovered },   // 1 Recovered
-            Cell { state: HealthState::Infected },    // 1 more Infected (total: 2)
-        ];
-
-        // 🧱 Manually construct the grid with our predefined cells
-        let grid = Grid {
-            grid_x: 2,
-            grid_y: 2,
-            cells,
-        };
-
-        // 🧮 Call the function under test
-        let stats = count_states(&grid);
-
-        // ✅ Assert that the counts match what we expect
-        assert_eq!(stats.susceptible, 1); // 1 Susceptible
-        assert_eq!(stats.infected, 2);    // 2 Infected
-        assert_eq!(stats.recovered, 1);   // 1 Recovered
+    fn dummy_params(i_ratio: f64) -> SirParams {
+        SirParams { beta: 0.0, gamma: 0.0, dt: 1.0, i_ratio, s_ratio: 1.0 }
     }
 
+    #[test]
+    fn test_maths_count_states_case1() {
+        // Create a 2x2 grid with known states
+        let mut grid = Grid::init(2, 2, &dummy_params(0.0));
+        // Manually assign states
+        grid.write(grid.get_index(0, 0), HealthState::Susceptible);
+        grid.write(grid.get_index(1, 0), HealthState::Infected);
+        grid.write(grid.get_index(0, 1), HealthState::Recovered);
+        grid.write(grid.get_index(1, 1), HealthState::Infected);
+
+        let stats = count_states(&grid);
+        assert_eq!(stats.susceptible, 1);
+        assert_eq!(stats.infected,    2);
+        assert_eq!(stats.recovered,   1);
+    }
 }
