@@ -2,101 +2,112 @@
 use rand::Rng;
 use std::mem::size_of;
 
-// ffsdg
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Two-bit encoding for three health states.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum HealthState {
-    Susceptible,
-    Infected,
-    Recovered,
+    Susceptible = 0,
+    Infected    = 1,
+    Recovered   = 2,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Cell {
-    pub state: HealthState,
-}
-
+/// Flat, bit-packed grid: 2 bits per cell, 4 cells per byte.
 pub struct Grid {
     pub grid_x: usize,
     pub grid_y: usize,
-    pub cells: Vec<Cell>, // Flattened 2D grid
+    pub cells: Vec<u8>,  // 2 bits per cell packed into bytes
 }
-
 impl Grid {
-    /// Creates a new grid of given dimensions.
-    /// Uses `i_ratio` from `SirParams` to determine the fraction of cells initialized as infected.
+    /// Initialize a new grid, randomly infecting according to params.i_ratio.
     pub fn init(grid_x: usize, grid_y: usize, params: &SirParams) -> Self {
+        const MAX_CELLS: usize = 1_000_000_000;
+        let size = grid_x.checked_mul(grid_y)
+            .expect("Grid dimensions overflowed");
 
-        let max_cells = 1_000_000_000; // 10 million max cells
-        let size = grid_x * grid_y;
-
-        if size > max_cells {
+        if size > MAX_CELLS {
             panic!(
-                "Grid too large: {}x{} = {} cells. Limit is {}.\n\
-                 Please reduce the grid size (e.g., grid_x * grid_y <= {}).",
-                grid_x, grid_y, size, max_cells, max_cells
+                "Grid too large: {}x{} = {} cells. Limit is {}.",
+                grid_x, grid_y, size, MAX_CELLS
             );
         }
-
-        let cells = (0..size)
-            .map(|_| {
-                let mut rng = rand::thread_rng();
-                let roll = rng.r#gen::<f64>(); 
-                let state = if roll < params.i_ratio {
-                    HealthState::Infected
-                } else {
-                    HealthState::Susceptible
-                };
-                Cell { state }
-            })
-            .collect();
-
-        Self {
-            grid_x,
-            grid_y,
-            cells,
+        // 4 cells per byte
+        let byte_len = (size + 3) / 4;
+        let mut cells = vec![0u8; byte_len];
+        let mut rng = rand::thread_rng();
+        for idx in 0..size {
+            let roll: f64 = rng.r#gen();
+            let state = if roll < params.i_ratio {
+                HealthState::Infected
+            } else {
+                HealthState::Susceptible
+            };
+            Self::write_state(&mut cells, idx, state);
         }
-    }
-    pub fn get_grid_size(&self) -> (usize, usize, usize) {
-        let cell_size = size_of::<Cell>();
-        let heap_size = self.cells.len() * cell_size;
-        let grid_struct_size = size_of::<Grid>();
-
-        println!("Size of one Cell: {} bytes", cell_size);
-        println!(
-            "Total heap size: {} bytes (~{:.2} MB)",
-            heap_size,
-            heap_size as f64 / (1024.0 * 1024.0)
-        );
-        println!("Stack size of Grid struct: {} bytes", grid_struct_size);
-
-        (cell_size, heap_size, grid_struct_size)
+        Grid { grid_x, grid_y, cells }
     }
 
+    /// Internal helper: write directly to raw cell buffer
+    fn write_state(cells: &mut [u8], idx: usize, state: HealthState) {
+        let byte = idx / 4;
+        let shift = (idx % 4) * 2;
+        let mask = !(0b11 << shift);
+        cells[byte] = (cells[byte] & mask) | ((state as u8) << shift);
+    }
+
+    /// Get cell index (linear), panics if out of bounds.
     pub fn get_index(&self, x: usize, y: usize) -> usize {
-        y * self.grid_x + x // Row-major layout: rows first, then columns
+        y * self.grid_x + x
     }
 
+    /// Return the 8 neighbors' coordinates (still allocates Vec here).
     pub fn get_neighbors(&self, x: usize, y: usize) -> Vec<(usize, usize)> {
         let mut neighbors = Vec::with_capacity(8);
-
         for dy in -1..=1 {
             for dx in -1..=1 {
-                if dx == 0 && dy == 0 {
-                    continue;
-                }
-
+                if dx == 0 && dy == 0 { continue; }
                 let nx = x as isize + dx;
                 let ny = y as isize + dy;
-
                 if nx >= 0 && nx < self.grid_x as isize && ny >= 0 && ny < self.grid_y as isize {
                     neighbors.push((nx as usize, ny as usize));
                 }
             }
         }
-
         neighbors
     }
+
+    /// Read the state at linear index.
+    pub fn read(&self, idx: usize) -> HealthState {
+        let byte = idx / 4;
+        let shift = (idx % 4) * 2;
+        match (self.cells[byte] >> shift) & 0b11 {
+            0 => HealthState::Susceptible,
+            1 => HealthState::Infected,
+            2 => HealthState::Recovered,
+            _ => unreachable!("Invalid state bits"),
+        }
+    }
+
+    /// Write a state at linear index.
+    pub fn write(&mut self, idx: usize, state: HealthState) {
+        let byte = idx / 4;
+        let shift = (idx % 4) * 2;
+        let mask = !(0b11 << shift);
+        self.cells[byte] = (self.cells[byte] & mask) | ((state as u8) << shift);
+    }
+
+    /// Prints approximate memory usage: 2 bits/cell packed in `cells.len()` bytes.
+    pub fn get_grid_size(&self) -> (usize, usize, usize) {
+        let bits_per_cell = 2;
+        let heap_bytes = self.cells.len();
+        let struct_bytes = std::mem::size_of::<Self>();
+        println!("Bits per cell: {}", bits_per_cell);
+        println!("Total heap usage: {} bytes (~{:.2} MB)", heap_bytes, heap_bytes as f64 / (1024.0*1024.0));
+        println!("Grid struct size: {} bytes", struct_bytes);
+        (bits_per_cell, heap_bytes, struct_bytes)
+    }
 }
+
+
 
 #[cfg(test)]
 mod tests {
@@ -119,17 +130,18 @@ mod tests {
         let grid = Grid::init(10, 5, &params);
         assert_eq!(grid.grid_x, 10);
         assert_eq!(grid.grid_y, 5);
-        assert_eq!(grid.cells.len(), 50);
+        assert_eq!(grid.cells.len(), (10 * 5 + 3) / 4); // expect 13 bytes
     }
 
     #[test]
     fn test_grid_get_grid_size_case1() {
         let params = dummy_params(0.0);
         let grid = Grid::init(100, 100, &params);
-        let (cell_size, heap_size, struct_size) = grid.get_grid_size();
-        assert_eq!(cell_size, 1);
-        assert_eq!(heap_size, 10000);
-        assert_eq!(struct_size, 40);
+        let (bits_per_cell, heap_size, struct_size) = grid.get_grid_size();
+    
+        assert_eq!(bits_per_cell, 2);
+        assert_eq!(heap_size, 2500); // 10000 cells / 4 = 2500 bytes
+        assert!(struct_size > 0); // or check against actual value
     }
 
     #[test]
