@@ -4,12 +4,13 @@
     pub mod simulation;
 }
 
-use crate::utils::grid::{Grid, HealthState};
+use crate::utils::grid::{Grid, HealthState, tile_grid};
 use crate::utils::maths::{SirParams, count_states};
 use crate::utils::simulation::{step_grid, step_grid_tiled};
 
 // Time code execution
 use std::time::Instant;
+use rayon::prelude::*;
 
 fn main() {
 
@@ -44,14 +45,20 @@ fn main() {
 
 
         step_grid(&mut grid, &params)
-;        //step_grid_tiled(&mut grid, &params, 25,25);
+;       // Parallelie approach for very large grids
+        //grid = step_grid_tiled(&grid, &params, 25, 25);
+       
+
         day += 1;
-    }
+
+    };
     
     let elapsed = start_time.elapsed(); // Stop timing
     println!(
         "⏱️ Simulation completed in {:.2?} ({} days)",
         elapsed, day
     );
+
+
 }
 

@@ -134,7 +134,7 @@ impl<'a> Tile<'a> {
         Some(self.grid.read(idx))
     }
 
-    pub fn get_neighbors(&self, x: usize, y: usize) -> Vec<HealthState> {
+    pub fn get_neighbors_healthstates(&self, x: usize, y: usize) -> Vec<HealthState> {
         // Pre-allocate space for up to 8 neighbors
         let mut neighbors = Vec::with_capacity(8);
 
