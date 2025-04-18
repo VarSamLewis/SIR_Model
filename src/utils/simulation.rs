@@ -56,12 +56,13 @@ pub fn step_grid(grid: &mut Grid, params: &SirParams) {
 
     *grid = new_grid;
 }
+
 pub fn step_tile(tile: &Tile, params: &SirParams, output: &mut Grid) {
     for y in 0..tile.tile_y {
         for x in 0..tile.tile_x {
             let idx = output.get_index(tile.origin_x + x, tile.origin_y + y);
             let current = tile.get_state(x, y).unwrap();
-            let neighbors = tile.get_neighbors(x, y);
+            let neighbors = tile.get_neighbors_healthstates(x, y);
 
             let new_state = match current {
                 HealthState::Susceptible => {
@@ -88,12 +89,34 @@ pub fn step_tile(tile: &Tile, params: &SirParams, output: &mut Grid) {
     }
 }
 
+/*
 pub fn step_grid_tiled(grid: &Grid, params: &SirParams, tile_width: usize, tile_height: usize) -> Grid {
     let mut next = Grid::init(grid.grid_x, grid.grid_y, &SirParams { beta: 0.0, gamma: 0.0, dt: 1.0, i_ratio: 0.0, s_ratio: 1.0 });
     let tiles = tile_grid(grid, tile_width, tile_height);
     for tile in &tiles {
         step_tile(tile, params, &mut next);
     }
+    next
+}*/
+
+pub fn step_grid_tiled(grid: &Grid, params: &SirParams, tile_width: usize, tile_height: usize) -> Grid {
+    // Initialize the next grid
+    let mut next = Grid::init(grid.grid_x, grid.grid_y, &SirParams { beta: 0.0, gamma: 0.0, dt: 1.0, i_ratio: 0.0, s_ratio: 1.0 });
+
+    // Split the grid into tiles
+    let tiles = tile_grid(grid, tile_width, tile_height);
+
+    // Use a thread-safe wrapper for the next grid
+    use rayon::prelude::*;
+    use std::sync::Mutex;
+    let next_mutex = Mutex::new(&mut next);
+
+    // Process each tile in parallel
+    tiles.par_iter().for_each(|tile| {
+        let mut next_guard = next_mutex.lock().unwrap(); // Lock the grid for writing
+        step_tile(tile, params, &mut next_guard);
+    });
+
     next
 }
 
