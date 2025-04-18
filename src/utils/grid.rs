@@ -60,19 +60,20 @@ impl Grid {
     }
 
     /// Return the 8 neighbors' coordinates (still allocates Vec here).
-    pub fn get_neighbors(&self, x: usize, y: usize) -> Vec<(usize, usize)> {
-        let mut neighbors = Vec::with_capacity(8);
+    pub fn get_neighbors(&self, x: usize, y: usize, buffer: &mut [(usize, usize)]) -> usize {
+        let mut count = 0;
         for dy in -1..=1 {
             for dx in -1..=1 {
                 if dx == 0 && dy == 0 { continue; }
                 let nx = x as isize + dx;
                 let ny = y as isize + dy;
                 if nx >= 0 && nx < self.grid_x as isize && ny >= 0 && ny < self.grid_y as isize {
-                    neighbors.push((nx as usize, ny as usize));
+                    buffer[count] = (nx as usize, ny as usize);
+                    count += 1
                 }
             }
         }
-        neighbors
+        count
     }
 
     /// Read the state at linear index.
@@ -134,10 +135,8 @@ impl<'a> Tile<'a> {
         Some(self.grid.read(idx))
     }
 
-    pub fn get_neighbors_healthstates(&self, x: usize, y: usize) -> Vec<HealthState> {
-        // Pre-allocate space for up to 8 neighbors
-        let mut neighbors = Vec::with_capacity(8);
-
+    pub fn get_neighbors_healthstates(&self, x: usize, y: usize, buffer: &mut [Option<HealthState>; 8]) -> usize {
+        let mut count = 0;
         // Loop over the 3x3 grid centered at (x, y)
         for dy in -1..=1 {
             for dx in -1..=1 {
@@ -153,12 +152,13 @@ impl<'a> Tile<'a> {
                     // Use get_state to retrieve the neighbor’s health state (returns Option)
                     if let Some(state) = self.get_state(nx, ny) {
                         // If the neighbor exists and is within bounds, store its state
-                        neighbors.push(state);
+                        buffer[count] = Some(state);
+                        count += 1;
                     }
                 }
             }
         }
-        neighbors
+        count
     }
 }
 
