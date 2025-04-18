@@ -5,10 +5,14 @@ use crate::utils::maths::SirParams;
 
 /// Count how many infected neighbors are around (x, y)
 fn count_infected_neighbors(grid: &Grid, x: usize, y: usize) -> usize {
-    grid.get_neighbors(x, y)
-        .iter()
-        .filter(|(nx, ny)| {
-            let n_idx = grid.get_index(*nx, *ny);
+    let mut buffer = [(0, 0); 8]; // Pre-allocate buffer for neighbor coordinates
+    let count = grid.get_neighbors(x, y, &mut buffer); // Get neighbor coordinates
+
+    // Count how many neighbors are infected
+    buffer.iter()
+        .take(count) // Only process valid neighbors
+        .filter(|&&(nx, ny)| {
+            let n_idx = grid.get_index(nx, ny);
             grid.read(n_idx) == HealthState::Infected
         })
         .count()
@@ -58,15 +62,22 @@ pub fn step_grid(grid: &mut Grid, params: &SirParams) {
 }
 
 pub fn step_tile(tile: &Tile, params: &SirParams, output: &mut Grid) {
+    let mut buffer = [None; 8]; // Pre-allocate buffer for neighbors
     for y in 0..tile.tile_y {
         for x in 0..tile.tile_x {
             let idx = output.get_index(tile.origin_x + x, tile.origin_y + y);
             let current = tile.get_state(x, y).unwrap();
-            let neighbors = tile.get_neighbors_healthstates(x, y);
+            let count = tile.get_neighbors_healthstates(x, y, &mut buffer); // Get neighbors
 
+            // Count infected neighbors
+            let infected_neighbors = buffer.iter()
+                .take(count)
+                .filter(|&&s| s == Some(HealthState::Infected))
+                .count();
+
+            // Determine the new state
             let new_state = match current {
                 HealthState::Susceptible => {
-                    let infected_neighbors = neighbors.iter().filter(|&&s| s == HealthState::Infected).count();
                     let p = (params.beta * infected_neighbors as f64 / 8.0) * params.dt;
                     if rand::random::<f64>() < p {
                         HealthState::Infected
